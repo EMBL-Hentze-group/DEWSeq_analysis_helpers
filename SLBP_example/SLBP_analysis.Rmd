@@ -1,6 +1,6 @@
 ---
 title: "SLBP analysis"
-author: "Sudeep Sahadevan, Thomas Schwarzl and Thileepan Sekaran"
+author: "Thomas Schwarzl, Sudeep Sahadevan and Thileepan Sekaran"
 date: "3/12/2021"
 output:
   BiocStyle::html_document:
@@ -17,6 +17,8 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+# SLBP analysis 
 
 This markdown file contains the complete analysis of SLBP example dataset and follows the same analysis steps and file naming patterns as it is described in the chapter. 
 
@@ -48,12 +50,14 @@ suppressPackageStartupMessages(require(ggrepel))
 setwd('/path/to/SLBP_analysis')
 ```
 ```{r countMat}
-count_matrix <- fread('counts/SLBP_K562_w50s20_counts.txt.gz', stringsAsFactors=FALSE, sep="\t", header=TRUE)
+count_matrix <- fread('counts/SLBP_K562_w50s20_counts.txt.gz', 
+                      stringsAsFactors=FALSE, sep="\t", header=TRUE)
 count_matrix <- column_to_rownames(count_matrix,'unique_id')
 head(count_matrix)
 ```
 ```{r sampleMat}
-col_data <- data.frame(type=c('IP','IP','SMI'), row.names=colnames(count_matrix))
+col_data <- data.frame(type=c('IP','IP','SMI'), 
+                       row.names=colnames(count_matrix))
 head(col_data)
 ```
 ```{r annotationFile}
@@ -62,7 +66,8 @@ annotation_file <- 'annotation/SLBP_K562_w50s20_annotation.txt.gz'
 
 ### Create DESeqDataset
 ```{r ddw1}
-ddw <- DESeqDataSetFromSlidingWindows(countData=count_matrix, colData=col_data, annotObj=annotation_file, design=~type)
+ddw <- DESeqDataSetFromSlidingWindows(countData=count_matrix, colData=col_data, 
+                                      annotObj=annotation_file, design=~type)
 ```
 ```{r ddw2}
 head(ddw)
@@ -121,7 +126,7 @@ rm(ddw_mRNAs)
 ## Prefiltering
 
 ```{r pref}
-keep <- rowSums(counts(ddw)) >= 1
+keep <- which(rowSums(counts(ddw)>1)>=2)
 ddw <- ddw[keep,]
 ddw
 ```
@@ -162,8 +167,10 @@ plotDispEsts(ddw_local)
 
 
 ```{r resids}
-parametric_resid <- na.omit(with(mcols(ddw_param),abs(log(dispGeneEst)-log(dispFit))))
-local_resid <- na.omit(with(mcols(ddw_local),abs(log(dispGeneEst)-log(dispFit))))
+parametric_resid <- na.omit(with(mcols(ddw_param),
+                                 abs(log(dispGeneEst)-log(dispFit))))
+local_resid <- na.omit(with(mcols(ddw_local),
+                            abs(log(dispGeneEst)-log(dispFit))))
 ```
 
 ```{r summary1}
@@ -173,8 +180,13 @@ summary(parametric_resid)
 summary(local_resid)
 ```
 ```{r residHistogram, fig.width=8}
-resid_df <- data.frame(residuals=c(parametric_resid,local_resid),fitType=c(rep("parametric",length(parametric_resid)),rep("local",length(local_resid))))
-ggplot(resid_df, aes(x = residuals, fill = fitType)) + scale_fill_manual(values = c("darkred", "darkblue")) + geom_histogram(alpha = 0.5, position='identity', bins = 100) + theme_bw()
+resid_df <- data.frame(residuals=c(parametric_resid,local_resid),
+                       fitType=c(rep("parametric",length(parametric_resid)),
+                                 rep("local",length(local_resid))))
+ggplot(resid_df, aes(x = residuals, fill = fitType)) + 
+  scale_fill_manual(values = c("darkred", "darkblue")) + 
+  geom_histogram(alpha = 0.5, position='identity', bins = 100) + 
+  theme_bw()
 ```
 
 The residual summaries and histogram clearly indicates that the `local` fit produces a better fit, hence smaller residuals, and therefore we proceed with using local fit for the rest of the analysis.
@@ -215,7 +227,8 @@ ddw <-  nbinomWaldTest(ddw)
 ### Extract significant windows 
 
 ```{r sigWindows}
-resultWindows <- resultsDEWSeq(ddw, contrast = c("type", "IP", "SMI"),tidy = TRUE) %>% as_tibble
+resultWindows <- resultsDEWSeq(ddw, contrast = c("type", "IP", "SMI"), 
+                               tidy = TRUE) %>% as_tibble
 resultWindows
 ```
 
@@ -230,20 +243,25 @@ resultWindows[,'p_adj'] <- p.adjust(resultWindows$pvalue, method="BH")
 ### Using IHW
 
 ```{r ihw}
-resultWindows[,"p_adj_IHW"] <- adj_pvalues(ihw(pvalue ~ baseMean, data = resultWindows, alpha = 0.05, nfolds = 10))
+resultWindows[,"p_adj_IHW"] <- adj_pvalues(ihw(pvalue ~ baseMean, 
+                                               data = resultWindows, 
+                                               alpha = 0.05, nfolds = 10))
 ```
 
 ## Combining windows to regions
 
 ```{r regions,message=FALSE}
-resultRegions <- extractRegions(windowRes=resultWindows, padjCol="p_adj_IHW", padjThresh = 0.05, log2FoldChangeThresh=1) %>% as_tibble
+resultRegions <- extractRegions(windowRes=resultWindows, padjCol="p_adj_IHW", 
+                                padjThresh = 0.05, 
+                                log2FoldChangeThresh=1) %>% as_tibble
 resultRegions
 ```
 
 ## Exporting results
 
 ```{r toBEd}
-toBED(windowRes=resultWindows, regionRes=resultRegions, padjThresh=0.05, padjCol="p_adj_IHW", fileName="SLBP_regions_w50s20.bed")
+toBED(windowRes=resultWindows, regionRes=resultRegions, padjThresh=0.05, 
+      padjCol="p_adj_IHW", fileName="SLBP_regions_w50s20.bed")
 ```
 
 ## Visualization
@@ -251,9 +269,21 @@ toBED(windowRes=resultWindows, regionRes=resultRegions, padjThresh=0.05, padjCol
 An R function to visualize enriched regions as volcano plots is available in [this github repo](https://github.com/EMBL-Hentze-group/DEWSeq_analysis_helpers). Please refer to README files in this repo for additional details.
 
 ```{r volcano, fig.width=8}
-source('https://raw.githubusercontent.com/EMBL-Hentze-group/DEWSeq_analysis_helpers/master/Volcano_plot/volcanoplot.R')
+fnSrc <- paste0('https://raw.githubusercontent.com/EMBL-Hentze-group/',
+                'DEWSeq_analysis_helpers/master/Volcano_plot/volcanoplot.R')
+source(fnSrc)
 # subset of all results
-testdf <- resultWindows[ resultWindows$p_adj_IHW<=0.95, ]
-volcanoplot(testdf,padj_col = 'p_adj_IHW',gene_names = c('HIST1H4K','HIST1H2AK','HIST1H1B','HIST1H3J','HIST1H2AM','H2AFX'))
+tophits <- resultWindows %>% filter( p_adj_IHW<=1e-5 & log2FoldChange>=10 )%>%
+                  select(gene_name,log2FoldChange) %>%
+                  arrange(-log2FoldChange) %>% 
+                  select(gene_name) %>%
+                  unlist() %>% unique()
+volcanoplot(resultWindows,padj_col = 'p_adj_IHW',gene_names = tophits[c(1:3)])
+```
+
+## Session info
+
+```{r}
+sessionInfo()
 ```
 
