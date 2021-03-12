@@ -2,6 +2,8 @@
 #'
 #' Visualizing the Log2FoldChange and pvalue of differentially expressed windows as volcano plot 
 #'
+#' @author Thileepan Sekaran
+#' 
 #' @param res_obj tibble. The results table from the resultsDEWSeq function
 #'
 #' @param padj_col character. Name of the column containing padjusted values
