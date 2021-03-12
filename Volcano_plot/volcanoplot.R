@@ -27,7 +27,7 @@ volcanoplot<- function(res_obj,
                        gene_names = NULL, 
                        label_color = "blue") 
 {
-  missingLibs <- setdiff(c('ggplot2','ggrepel'),install.packages()[,1])
+  missingLibs <- setdiff(c('ggplot2','ggrepel'),installed.packages()[,1])
   if(length(missingLibs)>0){
     stop('Cannot find all dependencies for this function. Missing package(s): ', paste(missingLibs,collapse=", "),' ')
   }
