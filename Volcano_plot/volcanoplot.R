@@ -65,15 +65,15 @@ volcanoplot<- function(res_obj,
   if (!is.null(title)) 
     p <- p + ggtitle(title) 
     p <- p + theme_bw() + scale_colour_manual(values = c("black","red",label_color),
-                          labels = paste0(c("Non.Sigwindows = ","SigWindows = ","Marker genes"),
+                          labels = paste0(c("Non sig. windows = ","Sig. windows = ","Marker genes"),
                           c(Total_nonsig_windows,Total_sig_windows)))+
                           scale_alpha(guide = "none")+
-                          theme(axis.title.x = element_text(size = 16,face = "bold"),
-                              axis.text.x = element_text(size = 14),
-                              axis.text.y = element_text(size = 14),
-                              axis.title.y = element_text(size = 16,face = "bold"),
-                              legend.text = element_text(size = 14,face = "bold"),
-                              legend.title = element_text(size = 14,face = "bold"),
+                          theme(axis.title.x = element_text(size = 12,face = "bold"),
+                              axis.text.x = element_text(size = 12),
+                              axis.text.y = element_text(size = 12),
+                              axis.title.y = element_text(size = 12,face = "bold"),
+                              legend.text = element_text(size = 10,face = "bold"),
+                              legend.title = element_blank(),
                               plot.title = element_text(size = 14,face = "bold",hjust = 0.5))
   
   
