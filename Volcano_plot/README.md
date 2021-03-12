@@ -13,7 +13,7 @@ Make sure to install the dependecies before sourcing the script.
 
 Before using this script, please make sure to run the DEWSeq analysis steps.
 
-For additional details, please refer to the [DEWSeq vignette](https://bioconductor.org/packages/release/bioc/vignettes/DEWSeq/inst/doc/DEWSeq.html) or the SLBP analysis example.
+For additional details, please refer to the [DEWSeq vignette](https://bioconductor.org/packages/release/bioc/vignettes/DEWSeq/inst/doc/DEWSeq.html) or the SLBP analysis example [available here](https://github.com/EMBL-Hentze-group/DEWSeq_analysis_helpers/SLBP_example).
 
 ```R
 source(https://raw.githubusercontent.com/EMBL-Hentze-group/DEWSeq_analysis_helpers/master/Volcano_plot/volcanoplot.R)

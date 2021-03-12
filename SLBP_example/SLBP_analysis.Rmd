@@ -1,0 +1,259 @@
+---
+title: "SLBP analysis"
+author: "Sudeep Sahadevan, Thomas Schwarzl and Thileepan Sekaran"
+date: "3/12/2021"
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    number_sections: true
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This markdown file contains the complete analysis of SLBP example dataset and follows the same analysis steps and file naming patterns as it is described in the chapter. 
+
+## Installation of DEWSeq and setup
+
+```{r install, eval=FALSE}
+if(!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("DEWSeq")
+```
+
+## Load  libraries
+
+```{r libs}
+suppressPackageStartupMessages(require(DEWSeq)) 
+suppressPackageStartupMessages(require(IHW))
+suppressPackageStartupMessages(require(tidyverse))
+suppressPackageStartupMessages(require(data.table))
+suppressPackageStartupMessages(require(ggplot2))
+suppressPackageStartupMessages(require(ggrepel))
+
+```
+
+`suppressPackageStartupMessages` ignores all start up messages
+
+## Data import
+
+```{r wd, eval=FALSE}
+setwd('/path/to/SLBP_analysis')
+```
+```{r countMat}
+count_matrix <- fread('counts/SLBP_K562_w50s20_counts.txt.gz', stringsAsFactors=FALSE, sep="\t", header=TRUE)
+count_matrix <- column_to_rownames(count_matrix,'unique_id')
+head(count_matrix)
+```
+```{r sampleMat}
+col_data <- data.frame(type=c('IP','IP','SMI'), row.names=colnames(count_matrix))
+head(col_data)
+```
+```{r annotationFile}
+annotation_file <- 'annotation/SLBP_K562_w50s20_annotation.txt.gz'
+```
+
+### Create DESeqDataset
+```{r ddw1}
+ddw <- DESeqDataSetFromSlidingWindows(countData=count_matrix, colData=col_data, annotObj=annotation_file, design=~type)
+```
+```{r ddw2}
+head(ddw)
+```
+
+## Estimate size factors 
+
+```{r sf1}
+ddw <- estimateSizeFactors(ddw)
+sizeFactors(ddw)
+```
+
+### Estimate size factors for only protein coding genes
+
+```{r sf2}
+ddw_mRNAs <- ddw[ rowData(ddw)[,"gene_type"] == "protein_coding", ]
+ddw_mRNAs <- estimateSizeFactors(ddw_mRNAs)
+sizeFactors(ddw) <- sizeFactors(ddw_mRNAs)
+```
+
+```{r sf2_1}
+sizeFactors(ddw_mRNAs)
+```
+### Estimate size factors without significant windows
+
+In this context, the aim is to use only the windows that which do not show a large difference between IP and SMI samples for normalization.
+
+This step uses `local` fit for dispersion estimation and Likelihood-ratio test (LRT)
+
+```{r sf3_1}
+ddw_tmp <- ddw
+ddw_tmp <- estimateDispersions(ddw_tmp, fitType = "local", quiet = TRUE)
+ddw_tmp <- nbinomLRT(ddw_tmp,full = ~type,reduced = ~1)
+tmp_significant_windows <- 
+                results(ddw_tmp,
+                    contrast = c("type", "IP", "SMI"),
+                    tidy = TRUE,
+                    filterFun = ihw) %>% 
+                dplyr::filter(padj < 0.05) %>% 
+                .[["row"]]
+rm(ddw_tmp)
+```
+
+Now estimate the size factors without the significant windows.
+
+```{r sf3_2}
+ddw_mRNAs <- ddw_mRNAs[ !rownames(ddw_mRNAs) %in% tmp_significant_windows, ]
+ddw_mRNAs <- estimateSizeFactors(ddw_mRNAs)
+sizeFactors(ddw) <- sizeFactors(ddw_mRNAs)
+```
+
+```{r sf3_3}
+sizeFactors(ddw_mRNAs)
+rm(ddw_mRNAs)
+```
+## Prefiltering
+
+```{r pref}
+keep <- rowSums(counts(ddw)) >= 1
+ddw <- ddw[keep,]
+ddw
+```
+
+## Estimate dispersion
+
+By default, DESeq2 uses `parametric` fit for dispersion estimation
+
+```{r parametric, eval=FALSE}
+ddw <- estimateDispersions(ddw,quiet=TRUE)
+```
+
+Users can also opt for `local` dispersion estimation
+
+```{r local, eval=FALSE}
+ddw <- estimateDispersions(ddw,fitType='local',quiet=TRUE)
+```
+
+### Decide fit
+
+Instead of picking a fit type at random, it is possible to decide the best fit based on the residuals after calculating the dispersion estimates with each type. This step is based on a [bioconductor post](https://support.bioconductor.org/p/81094/)
+
+```{r decideFit}
+ddw_param <- estimateDispersions(ddw,quiet=TRUE)
+ddw_local <- estimateDispersions(ddw,fitType='local',quiet=TRUE)
+```
+
+```{r paramPlot,fig.width=8}
+plotDispEsts(ddw_param)
+```
+
+```{r localPlot,fig.width=8}
+plotDispEsts(ddw_local)
+```
+
+
+
+
+
+```{r resids}
+parametric_resid <- na.omit(with(mcols(ddw_param),abs(log(dispGeneEst)-log(dispFit))))
+local_resid <- na.omit(with(mcols(ddw_local),abs(log(dispGeneEst)-log(dispFit))))
+```
+
+```{r summary1}
+summary(parametric_resid)
+```
+```{r summary2}
+summary(local_resid)
+```
+```{r residHistogram, fig.width=8}
+resid_df <- data.frame(residuals=c(parametric_resid,local_resid),fitType=c(rep("parametric",length(parametric_resid)),rep("local",length(local_resid))))
+ggplot(resid_df, aes(x = residuals, fill = fitType)) + scale_fill_manual(values = c("darkred", "darkblue")) + geom_histogram(alpha = 0.5, position='identity', bins = 100) + theme_bw()
+```
+
+The residual summaries and histogram clearly indicates that the `local` fit produces a better fit, hence smaller residuals, and therefore we proceed with using local fit for the rest of the analysis.
+
+```{r chooseFit}
+ddw <- ddw_local
+```
+
+this can also be done just based on the median values as:
+
+```{r chooseFit_auto, eval=FALSE}
+if (median(local_resid) <= median(parametric_resid)){
+    cat("chosen fitType: local")
+    ddw <- ddw_local
+  }else{
+    cat("chosen fitType: parametric")
+    ddw <- ddw_param
+  }
+```
+
+```{r removeOb}
+rm(ddw_local,ddw_param,resid_df,parametric_resid,local_resid)
+```
+## Differential expressed windows analysis
+
+Using LRT
+
+```{r LRT}
+ddw <- nbinomLRT(ddw, full = ~type, reduced = ~1)
+```
+
+Using Wald test
+
+```{r Wald, eval=FALSE}
+ddw <-  nbinomWaldTest(ddw)
+```
+
+### Extract significant windows 
+
+```{r sigWindows}
+resultWindows <- resultsDEWSeq(ddw, contrast = c("type", "IP", "SMI"),tidy = TRUE) %>% as_tibble
+resultWindows
+```
+
+## Multiple hypothesis correction
+
+### FDR correction using BH
+
+```{r bh}
+resultWindows[,'p_adj'] <- p.adjust(resultWindows$pvalue, method="BH")
+```
+
+### Using IHW
+
+```{r ihw}
+resultWindows[,"p_adj_IHW"] <- adj_pvalues(ihw(pvalue ~ baseMean, data = resultWindows, alpha = 0.05, nfolds = 10))
+```
+
+## Combining windows to regions
+
+```{r regions,message=FALSE}
+resultRegions <- extractRegions(windowRes=resultWindows, padjCol="p_adj_IHW", padjThresh = 0.05, log2FoldChangeThresh=1) %>% as_tibble
+resultRegions
+```
+
+## Exporting results
+
+```{r toBEd}
+toBED(windowRes=resultWindows, regionRes=resultRegions, padjThresh=0.05, padjCol="p_adj_IHW", fileName="SLBP_regions_w50s20.bed")
+```
+
+## Visualization
+
+An R function to visualize enriched regions as volcano plots is available in [this github repo](https://github.com/EMBL-Hentze-group/DEWSeq_analysis_helpers). Please refer to README files in this repo for additional details.
+
+```{r volcano, fig.width=8}
+source('https://raw.githubusercontent.com/EMBL-Hentze-group/DEWSeq_analysis_helpers/master/Volcano_plot/volcanoplot.R')
+# subset of all results
+testdf <- resultWindows[ resultWindows$p_adj_IHW<=0.95, ]
+volcanoplot(testdf,padj_col = 'p_adj_IHW',gene_names = c('HIST1H4K','HIST1H2AK','HIST1H1B','HIST1H3J','HIST1H2AM','H2AFX'))
+```
+
