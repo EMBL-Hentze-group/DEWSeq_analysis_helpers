@@ -1,0 +1,120 @@
+## Run DEWSeq analysis 
+
+This readme is a guide to `analyseStudy.Rmd` markdown file for creating DEWSeq analysis results and report from commandline using `Rscript`. This is a [parameterizied R-markdown](https://bookdown.org/yihui/rmarkdown/parameterized-reports.html) for generating analysis results and report. 
+
+### Requirements
+
+* [htseq-clip](https://pypi.org/project/htseq-clip/) python package
+* A latest version [R/Rscript](https://www.r-project.org/) with the following packages installed:
+  * [DEWSeq](https://www.bioconductor.org/packages/release/bioc/html/DEWSeq.html)
+  * [knitr](https://cran.r-project.org/web/packages/knitr/index.html) and    [rmarkdown](https://cran.r-project.org/web/packages/rmarkdown/index.html) packages
+
+### Input Data
+
+To run analysis, this markdown needs the following input files
+
+* **Annotation file**   
+    parameter name: `annotation_file`  
+    Sliding window annotation file, created using the python package [htseq-clip](https://pypi.org/project/htseq-clip/), created as follows:
+    
+    ```bash
+    $ htseq-clip annotation -g /path/to/gene_build.gff3 -o gene_build_flattend.txt.gz
+    $ htseq-clip createSlidingWindows -i gene_build_flattend.txt.gz  -o gene_build_flattend_sliding_windows.txt.gz
+    $ htseq-clip mapToId -a gene_build_flattend_sliding_windows.txt.gz -o gene_build_flattend_sliding_windows.map.gz
+    ```
+    
+    Please refer to htseq-clip [documentation](https://htseq-clip.readthedocs.io/en/latest/) for additional details and usage.   
+    This input file can either be plain text or gzipped.
+
+
+* **Count matrix file**  
+    parameter name: `countmatrix_file`  
+    Count matrix file contains the sliding window count data matrix generated using [htseq-clip](https://pypi.org/project/htseq-clip/) function [`createMatrix`](https://htseq-clip.readthedocs.io/en/latest/documentation.html#createslidingwindows) as follows:
+    
+    ```bash
+    # extract crosslink sites
+    $ htseq-clip extract -i /path/to/myexp_ip1.bam -e <Mate1 or Mate2> -s <crosslink site choice> -o myexp_ip1_sites.bed
+    $ htseq-clip extract -i /path/to/myexp_ip2.bam -e <Mate1 or Mate2> -s <crosslink site choice> -o myexp_ip2_sites.bed
+    $ htseq-clip extract -i /path/to/myexp_smi1.bam -e <Mate1 or Mate2> -s <crosslink site choice> -o myexp_smi1_sites.bed
+    $ htseq-clip extract -i /path/to/myexp_smi2.bam -e <Mate1 or Mate2> -s <crosslink site choice> -o myexp_smi2_sites.bed
+    
+    # count crosslink sites 
+    $ htseq-clip count -i myexp_ip1_sites.bed -a gene_build_flattend_sliding_windows.txt.gz -o counts/myexp_ip1_counts.txt
+    $ htseq-clip count -i myexp_ip2_sites.bed -a gene_build_flattend_sliding_windows.txt.gz -o counts/myexp_ip2_counts.txt
+    $ htseq-clip count -i myexp_smi1_sites.bed -a gene_build_flattend_sliding_windows.txt.gz -o counts/myexp_smi1_counts.txt
+    $ htseq-clip count -i myexp_smi2_sites.bed -a gene_build_flattend_sliding_windows.txt.gz -o counts/myexp_smi2_counts.txt
+    
+    # merge all counts to an R friendly matrix
+    $ htseq-clip createMatrix -i counts -b myexp -o counts/myexp_ip_smi_merged.txt
+    ```
+    
+    Please refer to htseq-clip [documentation](https://htseq-clip.readthedocs.io/en/latest/) for additional details.   
+    This input file can either be plain text or gzipped.
+
+* **Sample info file**  
+    parameter name: `sampleinfo_file`  
+    A two column `<TAB>` separated file with sample information column names are optional for this file. The first column is considered as the sample name column, and the sample names MUST match the column names in count matrix file described above. The second column should contain the sample treatment ie `IP` or `SMI`, and no other values are supported for in this column right now. An example file would look like:  
+
+    | Sample name  | Sample type |  
+    |:------------:|:-----------:|
+    | Sample_IP_1  | IP  |
+    | Sample_IP_2  | IP  |
+    | Sample_SMI_1 | SMI |
+    | Sample_SMI_2 | SMI |
+
+### Parameters
+The following parameters can be used to select analysis types/cut-off thresholds:
+
+
+| Param. name  | accepted value type | default value | behavior | 
+| -------|:------------:|:--------:|----------------------------|
+| `LRT`                 | `TRUE` / `FALSE` | `FALSE`| use default Wald test. Use LRT if the given value is `TRUE`. See [DESeq2](https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#variations-to-the-standard-workflow) vignette for details. <br/><br/> **`Note:`** In our experience, LRT is more accurate than Wald test. But, keep in mind that LRT is a stringent test in comparison to Wald. So if your protein of interest is a very active binder, run the analysis with `LRT=TRUE`, otherwise use it with caution as you may end up with no significant windows or regions in your final output. |  
+| `decide_fit`          | `TRUE` / `FALSE` | `TRUE` | decide on dispersion estimation fit type `local` or `parametric`, refer [DESeq2 vignette](https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#dispersion-plot-and-fitting-alternatives) and this [bioconductor post](https://support.bioconductor.org/p/81094/) for details. Use default `parametric` fit if the given value is `FALSE`. <br/><br/> **`Note:`**  `decide_fit=TRUE` will fit data using both parametric and local fit types and will choose the best fit of the two. Typically, this should give better results compared to using the default fit type `parametric`. But, keep in mind that this will also increase the total run time.|
+| `IHW`                 | `TRUE` / `FALSE` | `TRUE` | use [IHW](https://bioconductor.org/packages/release/bioc/html/IHW.html) for multiple tesing correction instead of default BH (Benjamini Hochberg) </br><br/> **`Note:`**  We recommend using IHW instead of default BH for fdr correction.|  
+| `overlap_correction`  | `TRUE` / `FALSE` | `FALSE` | Do not adjust p-value for overlapping windows. If `TRUE` use Bonferroni family wise error rate correction on overlapping sliding windows |  
+| `p_value_cutoff`      | between 0 and 1  | 0.05   | p adjusted value threshold for significant windows|  
+| `lfc_cutoff`          | value >0         | 1      | Log2 fold change threshold for significant windows |  
+| `protein`             | string           | NA     | Should be the name of the protein used in the study, and used only to generate report headings. Any name given here does not affect the results of the analysis. |
+
+### Output data
+This analysis will generate a number of files as outputs. The user MUST provide the file names to write these outputs using the following parameters:
+
+* `output_windows_file`   
+    File name to save overlapping window results from DEWSeq analysis. This file contains all results, including results for windows that are not significant according to p-value and log2 fold change cut-off thresholds described in the  **Parameters** section  
+    If the supplied file name ends with suffix `.gz` the output file will be gzipped.
+    
+* `output_regions_file`   
+    Overlapping windows that are significant according to the thresholds described above are merged into signifcant regions. This file contains only those significant regions and associated details  
+    If the supplied file name ends with suffix `.gz` the output file will be gzipped.
+
+* `output_bed_file`  
+    This is a BED formatted file containing significant/enriched windows and regions. This file can be used as a track to visualize enriched windows and regions using software such as [IGV](https://software.broadinstitute.org/software/igv/)
+
+* `output_Rdata`    
+    File name to save the session image. This output is optional as R analysis images can be huge.
+
+### Example usage
+
+Please refer to [rmarkdown::render help page](https://rmarkdown.rstudio.com/docs/reference/render.html) for a complete description.
+
+```bash
+Rscript -e 'rmarkdown::render(input = "/path/to/analyseStudy.Rmd", 
+  output_file="MyProtein_analysis_report.html", 
+  params = list(protein = "MyProtein",
+  sampleinfo_file = "MyProtein_sample_info.txt", 
+  countmatrix_file = "MyProtein_count_matrix.txt.gz", 
+  annotation_file = "MyProtein_htseq-clip_sliding_windows.txt.gz", 
+  output_windows_file = "MyProtein_result_windows.csv", 
+  output_regions_file = "MyProtein_result_significant_regions.csv", 
+  output_bed_file = "MyProtein_result_significant_regions_track.bed", 
+  p_value_cutoff = 0.1, lfc_cutoff = 1, 
+  overlap_correction = FALSE, IHW = TRUE, decide_fit = TRUE,LRT = TRUE))'
+```
+* `output_file="MyProtein_analysis_report.html"` : generate the analysis report as an html file    
+* `params=list(...)` : parameters for the analysis as R `list`
+
+
+Note that `output_Rdata`  is not supplied in this example.   
+Analysis report will be knitted as an html file with the supplied file name `MyProtein_analysis_report.html`
+
+
