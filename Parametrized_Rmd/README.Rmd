@@ -131,21 +131,21 @@ Please refer to [rmarkdown::render help page](https://rmarkdown.rstudio.com/docs
 
 ```bash
 Rscript -e 'rmarkdown::render(input = "/path/to/analyseStudy.Rmd", 
-  output_file="MyProtein_analysis_report.html", 
+  output_file="/full/path/to/MyProtein_analysis_report.html", 
   params = list(protein = "MyProtein",
-  sampleinfo_file = "MyProtein_sample_info.txt", 
-  countmatrix_file = "MyProtein_count_matrix.txt.gz", 
-  annotation_file = "MyProtein_htseq-clip_sliding_windows.txt.gz", 
-  output_windows_file = "MyProtein_result_windows.csv", 
-  output_regions_file = "MyProtein_result_significant_regions.csv", 
-  output_bed_file = "MyProtein_result_significant_regions_track.bed", 
+  sampleinfo_file = "/full/path/to/MyProtein_sample_info.txt", 
+  countmatrix_file = "/full/path/to/MyProtein_count_matrix.txt.gz", 
+  annotation_file = "/full/path/to/yProtein_htseq-clip_sliding_windows.txt.gz", 
+  output_windows_file = "/full/path/to/MyProtein_result_windows.csv", 
+  output_regions_file = "/full/path/to/MyProtein_result_significant_regions.csv", 
+  output_bed_file = "/full/path/to/MyProtein_result_significant_regions_track.bed", 
   min_count = 2, min_sample = 2,
   p_value_cutoff = 0.1, lfc_cutoff = 1, 
   overlap_correction = FALSE, IHW = TRUE, decide_fit = TRUE,LRT = TRUE))'
 ```
 * `output_file="MyProtein_analysis_report.html"` : generate the analysis report as an html file    
 * `params=list(...)` : parameters for the analysis as R `list`
-* **`Make sure`** that the input file paths are given as complete paths, otherwise `render` function will try to look for these files in paths relative to `analyseStudy.Rmd` file path. This can lead to confusing errors messages.
+* **Make sure** that the input file paths are given as complete paths, otherwise `render` function will try to look for these files in paths relative to `analyseStudy.Rmd` file path. This can lead to confusing errors messages.
 
 
 Note that `output_Rdata`  is not supplied in this example.   

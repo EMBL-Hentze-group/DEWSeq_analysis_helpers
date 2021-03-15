@@ -115,7 +115,7 @@ Rscript -e 'rmarkdown::render(input = "/path/to/analyseStudy.Rmd",
 ```
 * `output_file="MyProtein_analysis_report.html"` : generate the analysis report as an html file    
 * `params=list(...)` : parameters for the analysis as R `list`
-* **`Make sure`** that the input file paths are given as complete paths, otherwise `render` function will try to look for these files in paths relative to `analyseStudy.Rmd` file path. This can lead to confusing errors messages.
+* **Make sure** that the input file paths are given as complete paths, otherwise `render` function will try to look for these files in paths relative to `analyseStudy.Rmd` file path. This can lead to confusing errors messages.
 
 
 Note that `output_Rdata`  is not supplied in this example.   
