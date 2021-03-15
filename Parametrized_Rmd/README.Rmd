@@ -98,6 +98,8 @@ The following parameters can be used to select analysis types/cut-off thresholds
 
 | Param. name  | accepted value type | default value | behavior | 
 | -------|:------------:|:--------:|----------------------------|
+| `min_count`      | Integer  | 2   | minimum crosslink site per window per sample|
+| `min_sample`      | Integer  | 2   | Keep only the windows with at least `min_sample` number of samples with crosslink site count > `min_count` |
 | `LRT`                 | `TRUE` / `FALSE` | `FALSE`| use default Wald test. Use LRT if the given value is `TRUE`. See [DESeq2](https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#variations-to-the-standard-workflow) vignette for details. <br/><br/> `r colorize("**Note:**","#dd4814")` In our experience, LRT is more accurate than Wald test. But, keep in mind that LRT is a stringent test in comparison to Wald. So if your protein of interest is a very active binder, run the analysis with `LRT=TRUE`, otherwise use it with caution as you may end up with no significant windows or regions in your final output. |  
 | `decide_fit`          | `TRUE` / `FALSE` | `TRUE` | decide on dispersion estimation fit type `local` or `parametric`, refer [DESeq2 vignette](https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#dispersion-plot-and-fitting-alternatives) and this [bioconductor post](https://support.bioconductor.org/p/81094/) for details. Use default `parametric` fit if the given value is `FALSE`. <br/><br/> `r colorize("**Note:**","#dd4814")`  `decide_fit=TRUE` will fit data using both parametric and local fit types and will choose the best fit of the two. Typically, this should give better results compared to using the default fit type `parametric`. But, keep in mind that this will also increase the total run time.|
 | `IHW`                 | `TRUE` / `FALSE` | `TRUE` | use [IHW](https://bioconductor.org/packages/release/bioc/html/IHW.html) for multiple tesing correction instead of default BH (Benjamini Hochberg) </br><br/> `r colorize("**Note:**","#dd4814")`  We recommend using IHW instead of default BH for fdr correction.|  
@@ -137,6 +139,7 @@ Rscript -e 'rmarkdown::render(input = "/path/to/analyseStudy.Rmd",
   output_windows_file = "MyProtein_result_windows.csv", 
   output_regions_file = "MyProtein_result_significant_regions.csv", 
   output_bed_file = "MyProtein_result_significant_regions_track.bed", 
+  min_count = 2, min_sample = 2,
   p_value_cutoff = 0.1, lfc_cutoff = 1, 
   overlap_correction = FALSE, IHW = TRUE, decide_fit = TRUE,LRT = TRUE))'
 ```
