@@ -1,9 +1,4 @@
-'''
- @Author: Sudeep Sahadevan
- @Date: 2021-03-15 11:23:54
- @Last Modified by:   Sudeep Sahadevan
- @Last Modified time: 2021-03-15 11:23:54
-'''---
+---
 title: "DEWSeq Analysis"
 author: "Thomas Schwarzl and Sudeep Sahadevan"
 date: "07/10/2020"
