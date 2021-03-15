@@ -1,4 +1,9 @@
----
+'''
+ @Author: Sudeep Sahadevan
+ @Date: 2021-03-15 11:23:54
+ @Last Modified by:   Sudeep Sahadevan
+ @Last Modified time: 2021-03-15 11:23:54
+'''---
 title: "DEWSeq Analysis"
 author: "Thomas Schwarzl and Sudeep Sahadevan"
 date: "07/10/2020"
@@ -16,6 +21,8 @@ params:
   output_regions_file: ""
   output_bed_file: ""
   output_Rdata: ""
+  min_count: 2
+  min_sample: 2
   LRT: FALSE
   p_value_cutoff: 0.05
   lfc_cutoff: 1
@@ -37,6 +44,8 @@ output_windows_file <- params$output_windows_file
 output_regions_file <- params$output_regions_file
 output_bed_file <- params$output_bed_file
 output_Rdata <- params$output_Rdata
+minCount <- params$min_count
+minSample <- params$min_sample
 p_value_cutoff <- params$p_value_cutoff
 lfc_cutoff <- params$lfc_cutoff
 ```
@@ -44,6 +53,10 @@ lfc_cutoff <- params$lfc_cutoff
 Sanity check input parameter values
 
 ```{r sanityCheck, echo=FALSE, eval=TRUE}
+# round of minCount and minSample values first
+message("Any decimals given as values for min_count and min_sample parameters will be rounded off to the nearest integer.")
+minCount <- round(minCount)
+minSample <- round(minSample)
 # receive and sanity check p_value_cutoff
 if(p_value_cutoff<=0 || p_value_cutoff>=1){
   warning("p_value_cutoff must satisfy: 0<=p_value_cutoff<=1. Resetting to default value: 0.05")
@@ -93,6 +106,11 @@ This is the analysis of __`r protein`__ with
 sampleinfo file: ``r sampleinfo_file``   
 countmatrix file: ``r countmatrix_file`` and     
 annotation file: ``r annotation_file`` 
+
+with the following threshold:
+
+minimum read count per window per sample: ``r minCount``
+number of samples with minimum read count per window: ``r minSample``
 
 using the following parameters:   
 p-value cut-off: ``r p_value_cutoff``  
@@ -244,9 +262,26 @@ estimate the size factors without the significant windows.
 ```{r final_size_factors}
 ddw_mRNAs <- ddw_mRNAs[ !rownames(ddw_mRNAs) %in% tmp_significant_windows, ]
 ddw_mRNAs <- estimateSizeFactors(ddw_mRNAs)
-# now remove all the windows with rowSums < 10 from further calculation
-keep_exp <- rowSums(counts(ddw)) >= 10
-ddw <- ddw[keep_exp,]
+```
+
+before thresholding:
+```{r threshold1}
+dim(ddw)
+```
+
+Now threshold the windows read count table.
+```{r threshold2}
+keep_exp <-  which(rowSums(counts(ddw)>minCount)>=minSample)
+ddw <- ddw[keep_exp,])
+```
+
+after thresholding:
+```{r threshold3}
+dim(ddw)
+```
+assign size factors
+
+```{r final_assign}
 sizeFactors(ddw) <- sizeFactors(ddw_mRNAs)
 rm( list = c("tmp_significant_windows", "ddw_mRNAs"))
 sizeFactors(ddw)
