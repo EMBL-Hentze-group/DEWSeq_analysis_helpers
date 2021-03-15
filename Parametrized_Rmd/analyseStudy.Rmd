@@ -267,7 +267,7 @@ dim(ddw)
 Now threshold the windows read count table.
 ```{r threshold2}
 keep_exp <-  which(rowSums(counts(ddw)>minCount)>=minSample)
-ddw <- ddw[keep_exp,])
+ddw <- ddw[keep_exp,]
 ```
 
 after thresholding:
