@@ -1,0 +1,218 @@
+import re
+from pathlib import Path
+import sys
+import logging
+from snakemake.utils import min_version
+
+'''
+Snakemake pipeline for htseq-clip and DEWSeq analysis
+Sudeep Sahadevan
+Thomas Schwarzl
+
+contact: biohentze@embl.de
+'''
+
+'''
+require minimum version 
+crash if the workflow is not running on the required minimum version
+'''
+min_version('5.20.0') 
+
+
+def make_dirs(project, dirs):
+    '''
+    create project folders
+    '''
+    dirmap = {}
+    proj = Path(project)
+    for dir_key, dir_name in dirs.items():
+        pdir = proj/dir_name
+        if not pdir.exists():
+            pdir.mkdir()
+        dirmap[dir_key] = str(pdir)
+    return dirmap
+
+def _basename(file_path):
+    '''
+    return base name for any path
+    '''
+    fp = Path(file_path)
+    return fp.name.replace(''.join(fp.suffixes),'')
+
+def additional_params(rule_name):
+    '''
+    Return additional parameters from config for each rule
+    '''
+    if rule_name not in config:
+        logging.warning("{} not found in config".format(rule_name))
+        return ''
+    elif 'additional_params' not in config[rule_name]:
+        logging.warning("additional params not found in config[{}]".format(rule_name))
+        return ''
+    else:
+        return config[rule_name]['additional_params']
+
+def get_bam_files(bamdir):
+    '''
+    given an input directory, return all bam files in the directory as a dictionary
+    '''
+    bamdict = {}
+    bamre = re.compile(r'^.*\.bam*$',re.IGNORECASE)
+    for f in Path(bamdir).glob('*'):
+        if re.match(bamre,str(f)):
+            bamdict[f.stem]=str(f)
+    if len(bamdict)==0:
+        raise RuntimeError('Cannot find bam files in {}'.format(bamdir))
+    return bamdict
+
+project = config['project']
+if not Path(project).exists():
+    raise RuntimeError("Cannot find project folder: {}".format(project))
+
+# create all the dirs required
+dir_map = make_dirs(project, config['dirs'])
+# gff file basename
+gff_base = _basename(config['gff'])
+# bam files
+bam_dict = get_bam_files(dir_map['bam'])
+# bam file names
+baseName = sorted(bam_dict.keys())
+
+# rule order
+ruleorder: annotation > createSlidingWindows > mapToId > extract > count > mvcount > createMatrix  > all
+
+# remove tmp. count files on error or success
+tmp_counts = str(Path(dir_map['sites'])/'*_counts.txt.gz')
+
+onerror:
+    shell("rm -rf {}".format(tmp_counts))
+
+onsuccess:
+    shell("rm -rf {}".format(tmp_counts))
+
+rule all:
+    input:
+        mapid = expand("{anndir}/{gff_base}_w{w}_s{s}_annotation.txt.gz", anndir = dir_map["annotation"], gff_base = gff_base, w = config['createSlidingWindows']['w'], s = config['createSlidingWindows']['s']),
+        counts = expand("{counts_dir}/{baseName}_counts.txt.gz", counts_dir = dir_map['counts'], baseName=bam_dict.keys()),
+        merged = expand("{counts_dir}/combined_matrix_swcounts.txt", counts_dir = dir_map['counts'])
+
+rule annotation:
+    input:
+        gff = config['gff']
+    output:
+        expand("{anndir}/{gff_base}.bed.gz", anndir = dir_map["annotation"], gff_base = gff_base)
+    params:
+        geneid = config['annotation']['geneid'],
+        genename = config['annotation']['genename'],
+        genetype =  config['annotation']['genetype'],
+        add_params = additional_params('annotation')
+    log:
+        expand("{anndir}/{gff_base}.log", anndir = dir_map["annotation"], gff_base = gff_base)
+    shell:
+        """
+        htseq-clip annotation -g {input.gff} --geneid {params.geneid} --genename {params.genename} \
+        --genetype {params.genetype} {params.add_params} -o {output} 2> {log}
+        """
+
+rule createSlidingWindows:
+    input:
+        bed = rules.annotation.output
+    output:
+        expand("{anndir}/{gff_base}_w{w}_s{s}.txt.gz", anndir = dir_map["annotation"], gff_base = gff_base, w = config['createSlidingWindows']['w'], s = config['createSlidingWindows']['s'])
+    params:
+        w =  config['createSlidingWindows']['w'],
+        s =  config['createSlidingWindows']['s']
+    log:
+        expand("{anndir}/{gff_base}_w{w}_s{s}.log", anndir = dir_map["annotation"], gff_base = gff_base, w = config['createSlidingWindows']['w'], s = config['createSlidingWindows']['s'])
+    shell:
+        """
+        htseq-clip createSlidingWindows -i {input.bed} -o {output} -w {params.w} -s {params.s} 2> {log}
+        """
+
+checkpoint mapToId:
+    input:
+        windows = rules.createSlidingWindows.output
+    output:
+        expand("{anndir}/{gff_base}_w{w}_s{s}_annotation.txt.gz", anndir = dir_map["annotation"], gff_base = gff_base, w = config['createSlidingWindows']['w'], s = config['createSlidingWindows']['s'])
+    log:
+        expand("{anndir}/{gff_base}_w{w}_s{s}_annotation.log", anndir = dir_map["annotation"], gff_base = gff_base, w = config['createSlidingWindows']['w'], s = config['createSlidingWindows']['s'])
+    shell:
+        """
+        htseq-clip mapToId -a {input.windows} -o {output} 2> {log}
+        """
+
+rule extract:
+    input:
+        bam = lambda wildcards: bam_dict[wildcards.baseName]
+    output:
+        expand("{sites_dir}/{{baseName}}_sites.bed.gz", sites_dir = dir_map['sites'])
+    params:
+        mate = config['extract']['e'],
+        site =  config['extract']['s'],
+        offset =  config['extract']['g'],
+        qual =  config['extract']['q'],
+        minl =  config['extract']['m'],
+        maxl =  config['extract']['x'],
+        maxi =  config['extract']['l'],
+        cores = config['extract']['c'],
+        add_params = additional_params('extract')
+    log:
+        expand("{sites_dir}/{{baseName}}.log", sites_dir = dir_map['sites'])
+    shell:
+        """
+        sleep $[ ( $RANDOM % 10 )  + 1 ]s
+        htseq-clip extract -i {input.bam} -s {params.site} -e {params.mate} -q {params.qual} --offset {params.offset} \
+        -m {params.minl} -x {params.maxl} -l {params.maxl} {params.add_params} -c {params.cores} -o {output} 2> {log}
+        """
+
+checkpoint count:
+    '''
+    defined as checkpoint to force the execution of this rule, 
+    probably fine without it, but just to make sure
+    '''
+    input:
+        site = rules.extract.output,
+        ann = rules.createSlidingWindows.output
+    output:
+        expand("{sites_dir}/{{baseName}}_counts.txt.gz", sites_dir = dir_map['sites'])
+    params:
+        add_params = additional_params('count')
+    log:
+        expand("{sites_dir}/{{baseName}}_counts.log", sites_dir = dir_map['sites'])
+    shell:
+        """
+        sleep $[ ( $RANDOM % 20 )  + 1 ]s
+        htseq-clip count -i {input.site} -a {input.ann} {params.add_params} -o {output} 2> {log}
+        """
+
+def gather_count_files(wildcards):
+    checkpoint_output = checkpoints.count.get(**wildcards).output[0]
+    return checkpoint_output
+
+rule mvcount:
+    '''
+    This is just a hack rule to make sure that the checkpoint count has been run and all the files are present
+    '''
+    input:
+        gather_count_files
+    output:
+        expand("{counts_dir}/{{baseName}}_counts.txt.gz", counts_dir = dir_map['counts'])
+    shell:
+        """
+        cp {input} {output}
+        """
+
+rule createMatrix:
+    input:
+        counts = expand("{counts_dir}/{baseName}_counts.txt.gz", counts_dir = dir_map['counts'], baseName = bam_dict.keys()),
+        fldr = expand("{counts_dir}", counts_dir = dir_map['counts'])
+    output:
+        "{counts_dir}/combined_matrix_swcounts.txt"
+    params:
+        postfix = '_counts.txt.gz'
+    log:
+        "{counts_dir}/combined_matrix_swcounts.log"
+    shell:
+        """
+        htseq-clip createMatrix -i {input.fldr} --postfix {params.postfix} --output {output} 2> {log}
+        """

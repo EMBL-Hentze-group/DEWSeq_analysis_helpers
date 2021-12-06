@@ -1,0 +1,40 @@
+project: /path/to/projects/allProject/this_project/
+# This is the base folder for this project, all the directories under "dirs" will be sub directories of this base folder,
+
+gff: /path/to/gff_file.gff3 # path to gff3 annotation file. preferrably full path to the file
+
+dirs:
+  bam: bam # path to bam file folder, full path would be <project>/bam/, all bam files MUST BE sorted and indexed
+  annotation: annotation # annotations will be saved here
+  sites: sites # sites will be saved here
+  counts: counts # Final summarized counts and sample count files will be saved here
+
+# parameters for each step
+# parameters for "annotation" are based on ENCODE gff files
+annotation:
+  geneid: 'gene_id'
+  genename: 'gene_name'
+  genetype: 'gene_type'
+  additional_params: '--unsorted ' # can be used to additional parameters as space separated valeues, flags for instance 
+
+# parameters for createSlidingWindows rule
+createSlidingWindows:
+  w: 100 # window size
+  s: 5 # step size
+  additional_params: '' # can be used to additional parameters given as space separated values 
+
+# parameters to extract crosslink sites
+extract:
+  e: # USER must fill this in based on the protocol used (either 1 or 2)
+  s: # USER must fill this in based on the protocol used (s, i, d, m, e)
+  g: # USER must fill this in based on the protocol used 
+  q: 10
+  m: 0
+  x: 500
+  l: 10000
+  c: 2
+  additional_params: '' # '--primary --ignore -t /path/to/tmp'
+
+  # parameters for count
+count:
+  additional_params: '' # only one applicable here is --unstranded
